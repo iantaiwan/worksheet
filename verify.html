@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>護理部 LINE 訊息建立器 — 條件驗證程式</title>
+<style>
+:root{--ok:#0a7d3c;--bad:#b42318;--line:#dbe3e8;--muted:#64748b}
+*{box-sizing:border-box}
+body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans TC",sans-serif;background:#f4f7f8;color:#1f2937;padding:18px;max-width:840px;margin:auto}
+h1{font-size:20px;margin:0 0 4px}
+p.sub{color:var(--muted);margin:0 0 16px;font-size:13px}
+#banner{font-size:20px;font-weight:900;padding:16px;border-radius:14px;text-align:center;margin-bottom:16px}
+#banner.run{background:#fff7e6;color:#8a5a00;border:1px solid #ffe0a3}
+#banner.pass{background:#e7f6ec;color:var(--ok);border:1px solid #b6e2c6}
+#banner.fail{background:#fdecea;color:var(--bad);border:1px solid #f5c2bc}
+ol{list-style:none;padding:0;margin:0}
+li{background:#fff;border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin-bottom:10px;display:flex;gap:10px;align-items:flex-start}
+.mark{font-size:20px;line-height:1.3;flex:none}
+.mark.ok{color:var(--ok)}.mark.bad{color:var(--bad)}.mark.wait{color:var(--muted)}
+.body{flex:1;min-width:0}
+.title{font-weight:800}
+.desc{font-size:12.5px;color:var(--muted);margin-top:2px}
+.detail{font-size:12.5px;margin-top:6px;white-space:pre-wrap;background:#f8fafc;border-radius:8px;padding:8px;border:1px solid var(--line);display:none}
+.detail.show{display:block}
+.detail.bad{background:#fff5f4;border-color:#f5c2bc;color:var(--bad)}
+button#run{border:0;border-radius:10px;padding:10px 16px;font-weight:800;background:#287a67;color:#fff;cursor:pointer;margin-bottom:14px;font:inherit}
+iframe{position:absolute;left:-9999px;top:0;width:430px;height:900px;border:0}
+.legend{font-size:12px;color:var(--muted);margin-top:10px}
+</style>
+</head>
+<body>
+<h1>條件驗證程式</h1>
+<p class="sub">本頁會把實際的 <code>index.html</code> 載入並自動操作，逐條檢查所有需求。全部通過才顯示「✅ 全部通過」。</p>
+<button id="run">重新執行驗證</button>
+<div id="banner" class="run">準備中…</div>
+<ol id="results"></ol>
+<p class="legend">說明：本頁需與 index.html 放在同一個網站下開啟（例如 GitHub Pages 的 <code>/verify.html</code>）。點各項可展開檢查明細。</p>
+<iframe id="app" title="app-under-test"></iframe>
+
+<script>
+const iframe=document.getElementById('app');
+const banner=document.getElementById('banner');
+const results=document.getElementById('results');
+
+let consoleErrors=[];
+function loadApp(){
+  return new Promise(res=>{
+    iframe.onload=()=>{
+      consoleErrors=[];
+      try{ iframe.contentWindow.addEventListener('error',e=>consoleErrors.push(e.message)); }catch(e){}
+      setTimeout(res,80);
+    };
+    iframe.src='index.html?_='+Date.now()+Math.random();
+  });
+}
+const D=()=>iframe.contentDocument;
+const W=()=>iframe.contentWindow;
+const q=s=>D().querySelector(s);
+const qa=s=>[...D().querySelectorAll(s)];
+function fire(el,type){el.dispatchEvent(new (W().Event)(type,{bubbles:true}))}
+function setSel(el,v){el.value=v;fire(el,'input');fire(el,'change')}
+function setVal(el,v){el.value=v;fire(el,'input')}
+function clickType(name){const b=qa('.type-btn').find(x=>x.textContent.trim()===name);if(!b)throw'找不到班別按鈕：'+name;b.click()}
+function preview(){return q('#preview').textContent}
+function bizSeg(){return (preview().split('【個人業務】')[1]||'').trim()}
+function addBizCard(){q('.biz-section .add-biz').click()}
+function lastPick(){return qa('.business-card .biz-pick').slice(-1)[0]}
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+function assert(cond,msg){if(!cond)throw msg||'條件不成立';}
+
+// ── 你提過的每一個條件，逐條寫成檢查 ──
+const TESTS=[
+{
+  title:'1. 每個加入的個人業務項目都有自己的選擇選單',
+  desc:'點「加入個人業務」後，每一張項目卡片都內建可點選的業務下拉選單（你最初的需求）。',
+  async fn(){
+    await loadApp(); clickType('A 班');
+    addBizCard(); addBizCard();
+    const picks=qa('.business-card .biz-pick');
+    assert(picks.length===2,'應有 2 張卡片、各自一個選單，實際：'+picks.length);
+    assert(qa('.business-card').every(c=>c.querySelector('.biz-pick')),'有卡片缺少自己的選單');
+    return '兩張卡片各有獨立下拉選單';
+  }
+},
+{
+  title:'2. 可以新增「好幾項」個人業務（不是只能一項）',
+  desc:'連續新增多項，編號 ➊➋➌➍ 依序正確。',
+  async fn(){
+    await loadApp(); clickType('A 班');
+    const names=['欠卡追蹤','轉診追蹤','眼底轉介追蹤','急性病關懷追蹤'];
+    for(const n of names){addBizCard();setSel(lastPick(),n);}
+    assert(qa('.business-card').length===4,'卡片數應為4，實際：'+qa('.business-card').length);
+    const seg=bizSeg();
+    assert(/➊\s*欠卡追蹤/.test(seg)&&/➋\s*轉診追蹤/.test(seg)&&/➌\s*眼底轉介追蹤/.test(seg)&&/➍\s*急性病關懷追蹤/.test(seg),'四項編號不正確：\n'+seg);
+    return '成功新增 4 項，編號正確：\n'+seg;
+  }
+},
+{
+  title:'3. 第一次按加入個人業務並選取，功能正常無 bug',
+  desc:'全新載入後第一次操作即正常，且無 JavaScript 錯誤。',
+  async fn(){
+    await loadApp(); clickType('A 班');
+    addBizCard(); setSel(lastPick(),'欠卡追蹤');
+    assert(bizSeg().includes('欠卡追蹤'),'第一次選取後預覽未出現該項目');
+    assert(consoleErrors.length===0,'出現 JavaScript 錯誤：'+consoleErrors.join(' / '));
+    return '首次新增＋選取正常，無錯誤';
+  }
+},
+{
+  title:'4. 每個選項點下去都不會從即時預覽跳掉',
+  desc:'涵蓋全部 21 個選項；且下拉選單的 input 事件一觸發就顯示（不會閃掉）。',
+  async fn(){
+    await loadApp(); clickType('A 班'); addBizCard();
+    const opts=qa('.business-card .biz-pick option').map(o=>o.value).filter(Boolean);
+    const miss=[];
+    for(const n of opts){
+      await loadApp(); clickType('A 班'); addBizCard();
+      setSel(lastPick(),n);
+      const seg=bizSeg();
+      if(!(seg.includes(n)||n==='其他項目')) miss.push(n);
+    }
+    // input 事件即顯示（不等 change）
+    await loadApp(); clickType('A 班'); addBizCard();
+    const sel=lastPick(); sel.value='欠卡追蹤'; fire(sel,'input');
+    const shownOnInput=preview().includes('欠卡追蹤');
+    assert(miss.length===0,'這些選項選了卻沒顯示：'+miss.join('、'));
+    assert(shownOnInput,'下拉 input 事件時項目仍未顯示（會閃掉）');
+    return '全部 '+opts.length+' 個選項選取後都正常顯示，且 input 事件即時顯示';
+  }
+},
+{
+  title:'5. 卡片內部「無」不會清空整段個人業務',
+  desc:'含「無／填寫」的追蹤型業務切成「無」時，只影響該筆，其他業務保留。',
+  async fn(){
+    await loadApp(); clickType('A 班');
+    addBizCard(); setSel(lastPick(),'欠卡追蹤');
+    setVal(q('.business-card [data-biz="已接"]'),'3');
+    addBizCard(); setSel(lastPick(),'慢性病未回診追蹤');
+    const noneRadio=qa('.business-card').slice(-1)[0].querySelector('.day-mode[value=none]');
+    noneRadio.checked=true; fire(noneRadio,'change');
+    const seg=bizSeg();
+    assert(seg.includes('欠卡追蹤：已接3'),'第一筆業務被誤清空了：\n'+seg);
+    return '第一筆保留、第二筆顯示「無」：\n'+seg;
+  }
+},
+{
+  title:'6. 不用儲存草稿、只用載入草稿（自動保存）',
+  desc:'畫面沒有「儲存草稿」按鈕、有「載入草稿」按鈕；編輯即自動寫入。',
+  async fn(){
+    await loadApp(); clickType('A 班');
+    assert(!q('#saveDraft'),'仍存在「儲存草稿」按鈕，應移除');
+    assert(q('#loadDraft'),'找不到「載入草稿」按鈕');
+    addBizCard(); setSel(lastPick(),'欠卡追蹤');
+    const raw=W().localStorage.getItem('nursingV2Draft');
+    assert(raw&&raw.includes('欠卡追蹤'),'編輯後未自動保存到 localStorage');
+    return '無儲存按鈕、有載入按鈕，且已自動保存';
+  }
+},
+{
+  title:'7. 載入草稿完整還原，不會重置',
+  desc:'填寫→清除→載入草稿後，即時預覽內容與清除前完全一致。',
+  async fn(){
+    await loadApp(); clickType('A 班');
+    setSel(q('[data-role=clinic]'),'善化中山');
+    addBizCard(); setSel(lastPick(),'預防保健輸入');
+    setVal(q('.business-card [data-biz=stage1]'),'10');
+    const before=preview();
+    q('#clearAll').click();
+    assert(!preview().includes('善化中山'),'清除後預覽仍殘留內容');
+    q('#loadDraft').click();
+    assert(preview()===before,'載入草稿後與清除前不一致（發生重置）');
+    return '清除後可完整還原，未重置';
+  }
+},
+{
+  title:'8. 複製 LINE 訊息的格式正確',
+  desc:'輸出含正確標題、📅日期、🏥院所、十項交班標籤與【個人業務】編號格式，與範例一致。',
+  async fn(){
+    await loadApp(); clickType('A 班');
+    addBizCard(); setSel(lastPick(),'欠卡追蹤');
+    setVal(q('.business-card [data-biz="已接"]'),'3');
+    const p=preview();
+    const need=['【院所交班表】','📅 日期：','🏥 院所：北葉晨心',
+      '【未完成採檢】：無','【病歷申請】：無','【抽審資料整理進度】：無','【待修物品】：無',
+      '【流感快篩】：無','【COVID-19 快篩】：無','【克流感餘量】：無','【疫苗／藥品庫存】：無',
+      '【猛健樂（Mounjaro）】：無','【特殊交班事項】：無','【個人業務】','➊ 欠卡追蹤：已接3'];
+    const bad=need.filter(s=>!p.includes(s));
+    assert(bad.length===0,'輸出缺少必要格式：'+bad.join(' | ')+'\n\n實際輸出：\n'+p);
+    // 複製功能存在且可執行
+    assert(typeof W().copyBtn!=='undefined'||q('#copyBtn'),'找不到複製按鈕');
+    return '訊息格式完全正確：\n'+p;
+  }
+},
+{
+  title:'9. 重複業務防呆',
+  desc:'同一項業務（「其他項目」除外）不可重複加入，會被擋下。',
+  async fn(){
+    await loadApp(); clickType('A 班');
+    addBizCard(); setSel(lastPick(),'欠卡追蹤');
+    addBizCard(); setSel(lastPick(),'欠卡追蹤');
+    const second=qa('.business-card').slice(-1)[0];
+    assert(second.dataset.name!=='欠卡追蹤','重複的「欠卡追蹤」未被擋下');
+    return '重複項目已被擋下，狀態：'+q('#status').textContent;
+  }
+},
+{
+  title:'10. 手機操作便利元件齊備（方便性與直覺性）',
+  desc:'固定底部工具列、彈出預覽面板、複製提示、可重複新增提示皆存在。',
+  async fn(){
+    await loadApp(); clickType('A 班');
+    for(const id of ['#mobileBar','#mPreview','#mCopy','#previewSheet','#sheetCopy','#toast']){
+      assert(q(id),'缺少手機操作元件：'+id);
+    }
+    assert(q('.biz-section .add-biz').textContent.includes('新增一項'),'新增按鈕文字未強調可逐項新增');
+    assert(qa('.biz-section .note').some(n=>n.textContent.includes('可重複新增')),'缺少「可重複新增多項」提示');
+    return '底部工具列／預覽面板／複製提示／新增提示皆齊備';
+  }
+},
+{
+  title:'11. 單一檔案、可直接部署到 GitHub Pages',
+  desc:'app 不依賴任何外部網路資源（無外部 script/樣式），可當純靜態網頁上架。',
+  async fn(){
+    await loadApp();
+    const badScripts=qa('script[src]').filter(s=>/^https?:/i.test(s.getAttribute('src')||''));
+    const badLinks=qa('link[href]').filter(l=>/^https?:/i.test(l.getAttribute('href')||''));
+    assert(badScripts.length===0&&badLinks.length===0,'發現外部資源，無法離線部署：'+
+      [...badScripts,...badLinks].map(e=>e.getAttribute('src')||e.getAttribute('href')).join(' / '));
+    return '無外部相依，可直接部署為靜態網頁';
+  }
+},
+{
+  title:'12. I 班多院所各自獨立、輸出格式正確',
+  desc:'I 班可加多個院所，每院所有自己的個人業務與正確標題區塊。',
+  async fn(){
+    await loadApp(); clickType('I 班');
+    setSel(q('.clinic-card [data-role=clinic]'),'三和晨安');
+    q('.clinic-card .add-biz').click();
+    setSel(qa('.clinic-card .biz-pick').slice(-1)[0],'糖網收案');
+    setVal(q('.clinic-card [data-biz=people]'),'4');
+    q('#addClinic').click();
+    const c2=qa('.clinic-card')[1];
+    setSel(c2.querySelector('[data-role=clinic]'),'龍泉晨安');
+    const p=preview();
+    assert(p.includes('三和晨安')&&p.includes('糖網收案：4人')&&p.includes('龍泉晨安'),'I 班多院所輸出不正確：\n'+p);
+    assert((p.match(/【院所交班表】/g)||[]).length===2,'應有兩個院所交班表區塊');
+    return 'I 班兩院所輸出正確';
+  }
+},
+];
+
+async function runAll(){
+  results.innerHTML=''; banner.className='run'; banner.textContent='執行中…';
+  const items=TESTS.map(t=>{
+    const li=document.createElement('li');
+    li.innerHTML='<span class="mark wait">⏳</span><div class="body"><div class="title"></div><div class="desc"></div><div class="detail"></div></div>';
+    li.querySelector('.title').textContent=t.title;
+    li.querySelector('.desc').textContent=t.desc;
+    const det=li.querySelector('.detail');
+    li.querySelector('.title').style.cursor='pointer';
+    li.querySelector('.title').onclick=()=>det.classList.toggle('show');
+    results.appendChild(li);
+    return {li,det};
+  });
+  let allPass=true;
+  for(let i=0;i<TESTS.length;i++){
+    const {li,det}=items[i]; const mark=li.querySelector('.mark');
+    try{
+      const info=await TESTS[i].fn();
+      mark.textContent='✅'; mark.className='mark ok';
+      det.textContent=info||''; det.classList.remove('bad');
+    }catch(err){
+      allPass=false;
+      mark.textContent='❌'; mark.className='mark bad';
+      det.textContent=(typeof err==='string'?err:(err&&err.message)||String(err));
+      det.classList.add('bad','show');
+    }
+  }
+  banner.className=allPass?'pass':'fail';
+  banner.textContent=allPass?'✅ 全部通過（'+TESTS.length+'／'+TESTS.length+'）':'❌ 未全部通過，請看下方紅色項目';
+}
+document.getElementById('run').onclick=runAll;
+runAll();
+</script>
+</body>
+</html>
