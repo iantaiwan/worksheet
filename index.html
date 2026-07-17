@@ -1,0 +1,436 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>工作紀錄表產生器</title>
+<style>
+  :root {
+    --primary: #2563eb;
+    --primary-dark: #1d4ed8;
+    --danger: #dc2626;
+    --bg: #f1f5f9;
+    --card: #ffffff;
+    --border: #e2e8f0;
+    --text: #1e293b;
+    --muted: #64748b;
+    --chip-bg: #eff6ff;
+    --chip-border: #bfdbfe;
+    --chip-active: #2563eb;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: "Microsoft JhengHei", "PingFang TC", "Noto Sans TC", sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    padding: 16px;
+    max-width: 900px;
+    margin: 0 auto;
+  }
+  h1 {
+    font-size: 1.4rem;
+    text-align: center;
+    margin-bottom: 12px;
+  }
+  .toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: center;
+    margin-bottom: 16px;
+  }
+  button {
+    font-family: inherit;
+    font-size: 1rem;
+    border: none;
+    border-radius: 8px;
+    padding: 10px 16px;
+    cursor: pointer;
+    transition: background .15s;
+  }
+  .btn-primary { background: var(--primary); color: #fff; }
+  .btn-primary:hover { background: var(--primary-dark); }
+  .btn-secondary { background: #fff; color: var(--text); border: 1px solid var(--border); }
+  .btn-secondary:hover { background: #f8fafc; }
+  .btn-danger { background: #fff; color: var(--danger); border: 1px solid #fecaca; }
+  .btn-danger:hover { background: #fef2f2; }
+
+  .meta {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 12px 16px;
+    margin-bottom: 16px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  .meta label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: .95rem;
+    color: var(--muted);
+  }
+  .meta input {
+    font-family: inherit;
+    font-size: 1rem;
+    padding: 6px 10px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+  }
+
+  .entry {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 14px 16px;
+    margin-bottom: 14px;
+    animation: pop .18s ease-out;
+  }
+  @keyframes pop {
+    from { transform: scale(.97); opacity: 0; }
+    to   { transform: scale(1); opacity: 1; }
+  }
+  .entry-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 10px;
+    gap: 8px;
+  }
+  .entry-title {
+    font-weight: bold;
+    color: var(--primary);
+  }
+  .entry-selected {
+    flex: 1;
+    font-size: .95rem;
+    color: var(--muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .entry-del {
+    background: none;
+    border: none;
+    color: var(--danger);
+    font-size: 1.1rem;
+    padding: 4px 8px;
+  }
+  .chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .chip {
+    background: var(--chip-bg);
+    border: 1px solid var(--chip-border);
+    color: var(--primary-dark);
+    border-radius: 999px;
+    padding: 8px 14px;
+    font-size: .95rem;
+  }
+  .chip:hover { background: #dbeafe; }
+  .chip.active {
+    background: var(--chip-active);
+    border-color: var(--chip-active);
+    color: #fff;
+  }
+  .entry-extra {
+    margin-top: 10px;
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .entry-extra input {
+    flex: 1;
+    min-width: 160px;
+    font-family: inherit;
+    font-size: 1rem;
+    padding: 8px 10px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+  }
+
+  .output-panel {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 14px 16px;
+    margin-top: 20px;
+  }
+  .output-panel h2 { font-size: 1.1rem; margin-bottom: 8px; }
+  #output {
+    width: 100%;
+    min-height: 140px;
+    font-family: inherit;
+    font-size: 1rem;
+    padding: 10px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    resize: vertical;
+    white-space: pre-wrap;
+  }
+  .empty-hint {
+    text-align: center;
+    color: var(--muted);
+    padding: 30px 10px;
+    border: 2px dashed var(--border);
+    border-radius: 12px;
+    margin-bottom: 14px;
+  }
+
+  dialog {
+    border: none;
+    border-radius: 12px;
+    padding: 20px;
+    max-width: 480px;
+    width: 92%;
+  }
+  dialog::backdrop { background: rgba(0,0,0,.4); }
+  dialog h2 { font-size: 1.1rem; margin-bottom: 10px; }
+  dialog p { font-size: .9rem; color: var(--muted); margin-bottom: 10px; }
+  #optionsText {
+    width: 100%;
+    min-height: 220px;
+    font-family: inherit;
+    font-size: 1rem;
+    padding: 10px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    resize: vertical;
+  }
+  .dialog-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 12px;
+  }
+
+  @media print {
+    .toolbar, .entry-del, .chips, .entry-extra, .output-panel h2 ~ .toolbar, .no-print { display: none !important; }
+    body { background: #fff; }
+    .entry, .meta, .output-panel { border: none; padding: 4px 0; }
+  }
+</style>
+</head>
+<body>
+
+<h1>工作紀錄表產生器</h1>
+
+<div class="meta">
+  <label>日期 <input type="date" id="dateInput"></label>
+  <label>姓名 <input type="text" id="nameInput" placeholder="輸入姓名" size="10"></label>
+</div>
+
+<div class="toolbar no-print">
+  <button class="btn-primary" id="addBtn">＋ 加入個人業務</button>
+  <button class="btn-secondary" id="editOptionsBtn">✎ 編輯選項</button>
+  <button class="btn-secondary" id="copyBtn">📋 複製結果</button>
+  <button class="btn-danger" id="clearBtn">🗑 全部清除</button>
+</div>
+
+<div id="entries"></div>
+<div class="empty-hint" id="emptyHint">尚未加入任何個人業務，點選上方「＋ 加入個人業務」開始。</div>
+
+<div class="output-panel">
+  <h2>產生結果</h2>
+  <textarea id="output" readonly placeholder="加入並點選業務項目後，結果會自動顯示在這裡"></textarea>
+</div>
+
+<dialog id="optionsDialog">
+  <h2>編輯個人業務選項</h2>
+  <p>一行一個選項，儲存後每個項目卡片都會顯示這些按鈕。設定會保存在此瀏覽器中。</p>
+  <textarea id="optionsText"></textarea>
+  <div class="dialog-actions">
+    <button class="btn-secondary" id="resetOptionsBtn">還原預設</button>
+    <button class="btn-secondary" id="cancelOptionsBtn">取消</button>
+    <button class="btn-primary" id="saveOptionsBtn">儲存</button>
+  </div>
+</dialog>
+
+<script>
+const DEFAULT_OPTIONS = [
+  "戶口業務",
+  "交通業務",
+  "刑事業務",
+  "行政業務",
+  "保防業務",
+  "民防業務",
+  "勤指業務",
+  "督察業務",
+  "後勤業務",
+  "資訊業務",
+  "其他"
+];
+const STORAGE_OPTIONS_KEY = "worksheet_options";
+const STORAGE_ENTRIES_KEY = "worksheet_entries";
+
+let options = loadOptions();
+let entries = loadEntries();   // [{ selected: "戶口業務" | null, note: "" }]
+
+const entriesEl = document.getElementById("entries");
+const emptyHint = document.getElementById("emptyHint");
+const output = document.getElementById("output");
+const dateInput = document.getElementById("dateInput");
+const nameInput = document.getElementById("nameInput");
+
+function loadOptions() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(STORAGE_OPTIONS_KEY));
+    if (Array.isArray(saved) && saved.length) return saved;
+  } catch (e) {}
+  return [...DEFAULT_OPTIONS];
+}
+function saveOptions() {
+  localStorage.setItem(STORAGE_OPTIONS_KEY, JSON.stringify(options));
+}
+function loadEntries() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(STORAGE_ENTRIES_KEY));
+    if (Array.isArray(saved)) return saved;
+  } catch (e) {}
+  return [];
+}
+function saveEntries() {
+  localStorage.setItem(STORAGE_ENTRIES_KEY, JSON.stringify(entries));
+}
+
+function render() {
+  entriesEl.innerHTML = "";
+  emptyHint.style.display = entries.length ? "none" : "block";
+
+  entries.forEach((entry, idx) => {
+    const card = document.createElement("div");
+    card.className = "entry";
+
+    const head = document.createElement("div");
+    head.className = "entry-head";
+
+    const title = document.createElement("span");
+    title.className = "entry-title";
+    title.textContent = "個人業務 " + (idx + 1);
+
+    const selectedLabel = document.createElement("span");
+    selectedLabel.className = "entry-selected";
+    selectedLabel.textContent = entry.selected ? "已選：" + entry.selected : "請點選下方項目";
+
+    const delBtn = document.createElement("button");
+    delBtn.className = "entry-del";
+    delBtn.title = "刪除此項目";
+    delBtn.textContent = "✕";
+    delBtn.onclick = () => {
+      entries.splice(idx, 1);
+      saveEntries();
+      render();
+    };
+
+    head.append(title, selectedLabel, delBtn);
+    card.appendChild(head);
+
+    // 每個項目都顯示完整的選項按鈕，方便直接點選
+    const chips = document.createElement("div");
+    chips.className = "chips";
+    options.forEach(opt => {
+      const chip = document.createElement("button");
+      chip.className = "chip" + (entry.selected === opt ? " active" : "");
+      chip.textContent = opt;
+      chip.onclick = () => {
+        entry.selected = (entry.selected === opt) ? null : opt;
+        saveEntries();
+        render();
+      };
+      chips.appendChild(chip);
+    });
+    card.appendChild(chips);
+
+    const extra = document.createElement("div");
+    extra.className = "entry-extra";
+    const noteInput = document.createElement("input");
+    noteInput.type = "text";
+    noteInput.placeholder = "補充說明（選填）";
+    noteInput.value = entry.note || "";
+    noteInput.oninput = () => {
+      entry.note = noteInput.value;
+      saveEntries();
+      updateOutput();
+    };
+    extra.appendChild(noteInput);
+    card.appendChild(extra);
+
+    entriesEl.appendChild(card);
+  });
+
+  updateOutput();
+}
+
+function updateOutput() {
+  const lines = [];
+  if (dateInput.value) lines.push("日期：" + dateInput.value);
+  if (nameInput.value.trim()) lines.push("姓名：" + nameInput.value.trim());
+  if (lines.length) lines.push("");
+
+  entries.forEach((entry, idx) => {
+    let line = (idx + 1) + ". " + (entry.selected || "（未選擇）");
+    if (entry.note && entry.note.trim()) line += "－" + entry.note.trim();
+    lines.push(line);
+  });
+  output.value = lines.join("\n");
+}
+
+document.getElementById("addBtn").onclick = () => {
+  entries.push({ selected: null, note: "" });
+  saveEntries();
+  render();
+  entriesEl.lastElementChild.scrollIntoView({ behavior: "smooth", block: "center" });
+};
+
+document.getElementById("clearBtn").onclick = () => {
+  if (!entries.length || confirm("確定要清除所有項目嗎？")) {
+    entries = [];
+    saveEntries();
+    render();
+  }
+};
+
+document.getElementById("copyBtn").onclick = async () => {
+  updateOutput();
+  try {
+    await navigator.clipboard.writeText(output.value);
+    alert("已複製到剪貼簿");
+  } catch (e) {
+    output.select();
+    document.execCommand("copy");
+    alert("已複製到剪貼簿");
+  }
+};
+
+// 選項編輯
+const dlg = document.getElementById("optionsDialog");
+const optionsText = document.getElementById("optionsText");
+document.getElementById("editOptionsBtn").onclick = () => {
+  optionsText.value = options.join("\n");
+  dlg.showModal();
+};
+document.getElementById("cancelOptionsBtn").onclick = () => dlg.close();
+document.getElementById("resetOptionsBtn").onclick = () => {
+  optionsText.value = DEFAULT_OPTIONS.join("\n");
+};
+document.getElementById("saveOptionsBtn").onclick = () => {
+  const list = optionsText.value.split("\n").map(s => s.trim()).filter(Boolean);
+  if (!list.length) { alert("至少需要一個選項"); return; }
+  options = list;
+  saveOptions();
+  dlg.close();
+  render();
+};
+
+dateInput.value = new Date().toISOString().slice(0, 10);
+dateInput.oninput = updateOutput;
+nameInput.oninput = updateOutput;
+
+render();
+</script>
+</body>
+</html>
