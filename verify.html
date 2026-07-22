@@ -247,6 +247,27 @@ const TESTS=[
     return 'I 班兩院所輸出正確';
   }
 },
+{
+  title:'13. 長表單分段收合（院所交班／個人業務可收合）',
+  desc:'區塊標題可點擊收合／展開，收合後標題顯示已填數量。',
+  async fn(){
+    await loadApp(); clickType('A 班');
+    const hsec=q('.collapsible[data-sec=handover]');
+    const bsec=q('.collapsible[data-sec^=biz]');
+    assert(hsec&&bsec,'找不到可收合的院所交班或個人業務區塊');
+    hsec.querySelector('.sec-head').click();
+    assert(hsec.classList.contains('collapsed'),'點標題無法收合院所交班');
+    assert(W().getComputedStyle(hsec.querySelector('.sec-body')).display==='none','收合後內容仍顯示');
+    hsec.querySelector('.sec-head').click();
+    assert(!hsec.classList.contains('collapsed'),'再點無法展開');
+    const dataRadio=q('[data-handover=labs] input[value=data]');
+    dataRadio.checked=true; fire(dataRadio,'change');
+    assert(q('.collapsible[data-sec=handover] .sec-sum').textContent.includes('已填 1'),'院所交班摘要未顯示已填數');
+    addBizCard(); setSel(lastPick(),'欠卡追蹤');
+    assert(q('.collapsible[data-sec^=biz] .sec-sum').textContent.includes('已選 1'),'個人業務摘要未顯示已選數');
+    return '區塊可收合／展開，摘要正確顯示已填／已選數量';
+  }
+},
 ];
 
 async function runAll(){
