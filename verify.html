@@ -268,6 +268,30 @@ const TESTS=[
     return '區塊可收合／展開，摘要正確顯示已填／已選數量';
   }
 },
+{
+  title:'14. 未填提醒／完成度',
+  desc:'選了業務卻空白時標記「未填」並提示尚有幾項未填；填好後轉為已完成；不擋複製。',
+  async fn(){
+    await loadApp(); clickType('A 班');
+    addBizCard(); setSel(lastPick(),'欠卡追蹤');           // 選了但沒填
+    const card=q('.business-card');
+    assert(card.classList.contains('incomplete'),'選了卻空白的業務未被標記為未填');
+    assert(q('#completeness').textContent.includes('尚有 1 項'),'完成度提示未顯示未填數量');
+    assert(W().getComputedStyle(card.querySelector('.miss')).display!=='none','未填標籤未顯示');
+    // 複製仍可用（不擋）
+    assert(q('#copyBtn')||q('#mCopy'),'複製按鈕不存在');
+    // 填好後轉為完成
+    setVal(q('.business-card [data-biz="已接"]'),'3');
+    assert(!card.classList.contains('incomplete'),'填寫後仍被標記未填');
+    assert(q('#completeness').textContent.includes('皆已填寫'),'填寫後未顯示已完成');
+    // 交班：填寫模式留白也應提醒
+    const labs=q('[data-handover=labs]'); const dr=labs.querySelector('input[value=data]');
+    dr.checked=true; fire(dr,'change');
+    assert(labs.classList.contains('incomplete'),'交班選填寫卻留白未被標記');
+    assert(q('#completeness').textContent.includes('尚有 1 項'),'交班未填未計入提示');
+    return '未填標記、完成度提示、填寫後轉完成、不擋複製，皆正常';
+  }
+},
 ];
 
 async function runAll(){
